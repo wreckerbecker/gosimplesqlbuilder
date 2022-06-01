@@ -31,9 +31,11 @@ type Builder struct {
 	tableAlias string
 
 	selects   []string
+	inserts   []string
 	wheres    map[string]string
 	joins     []*JoinInfo
 	groups    []string
+	orders    []string
 	queryType QueryType
 	args      []interface{}
 
@@ -123,6 +125,14 @@ func (b *Builder) GroupBy(stmt string) *Builder {
 	return b
 }
 
+func (b *Builder) OrderBy(stmt string) *Builder {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
+	b.orders = append(b.orders, stmt)
+	return b
+}
+
 func (b *Builder) Limit(limit int) *Builder {
 	if limit == 0 {
 		return b
@@ -192,6 +202,13 @@ func (b *Builder) buildWhereSql() *WhereSqlPrepared {
 	}
 }
 
+func (b *Builder) orderSql() string {
+	if len(b.orders) == 0 {
+		return ""
+	}
+	return fmt.Sprintf("ORDER BY %s", strings.Join(b.orders, ","))
+}
+
 func (b *Builder) groupSql() string {
 	if len(b.groups) == 0 {
 		return ""
@@ -223,14 +240,16 @@ func (b *Builder) SelectSql() *SelectSqlPrepared {
 	wherePrepared := b.buildWhereSql()
 	joinSql := b.joinSql()
 	groupSql := b.groupSql()
+	orderSql := b.orderSql()
 	limitSql := b.limitSql()
 	offsetSql := b.offsetSql()
-	sql := fmt.Sprintf(`SELECT %s FROM %s %s %s %s %s %s %s`,
+	sql := fmt.Sprintf(`SELECT %s FROM %s %s %s %s %s %s %s %s`,
 		selectSql,
 		b.tableName, b.tableAlias,
 		wherePrepared.Sql,
 		joinSql,
 		groupSql,
+		orderSql,
 		limitSql, offsetSql)
 
 	countSql := fmt.Sprintf("SELECT count(*) FROM %s %s %s %s", b.tableName, b.tableAlias, wherePrepared.Sql, groupSql)
@@ -241,6 +260,28 @@ func (b *Builder) SelectSql() *SelectSqlPrepared {
 		Args:     b.args,
 	}
 }
+
+//type InsertSqlPrepared struct {
+//	Sql  string
+//	Args []interface{}
+//}
+//
+//func (b *Builder) InsertSql() *InsertSqlPrepared {
+//	var fields []string
+//	for _, name := range b.inserts {
+//		fields = append(fields, name)
+//	}
+//
+//	insertSql := strings.Join(fields, ",")
+//	wherePrepared := b.buildWhereSql()
+//	joinSql := b.joinSql()
+//}
+//
+//func (b *Builder) InsertValue(n string, v interface{}) *Builder {
+//	b.args = append(b.args, v)
+//	b.inserts = append(b.inserts, n)
+//	return b
+//}
 
 func NewBuilder(tableName, tableAlias string) *Builder {
 	if tableAlias == "" {
