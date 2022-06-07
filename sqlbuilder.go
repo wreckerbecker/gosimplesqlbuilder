@@ -32,6 +32,7 @@ type Builder struct {
 
 	selects   []string
 	inserts   []string
+	updates   map[string]string
 	wheres    map[string]string
 	joins     []*JoinInfo
 	groups    []string
@@ -202,6 +203,40 @@ func (b *Builder) buildWhereSql() *WhereSqlPrepared {
 	}
 }
 
+func (b *Builder) buildInsertArgSql() *WhereSqlPrepared {
+	if len(b.args) == 0 {
+		return nil
+	}
+
+	var statements []string
+	for i := range b.args {
+		statements = append(statements, fmt.Sprintf(`$%d`, i+1))
+	}
+
+	sql := fmt.Sprintf(`%s`, strings.Join(statements, ","))
+
+	return &WhereSqlPrepared{
+		Sql: "(" + sql + ")",
+	}
+}
+
+func (b *Builder) buildUpdateArgSql() *UpdateSqlPrepared {
+	if len(b.updates) == 0 {
+		return nil
+	}
+
+	var statements []string
+	for _, s := range b.updates {
+		statements = append(statements, s)
+	}
+
+	sql := fmt.Sprintf(`SET %s`, strings.Join(statements, ","))
+
+	return &UpdateSqlPrepared{
+		Sql: sql,
+	}
+}
+
 func (b *Builder) orderSql() string {
 	if len(b.orders) == 0 {
 		return ""
@@ -261,27 +296,66 @@ func (b *Builder) SelectSql() *SelectSqlPrepared {
 	}
 }
 
-//type InsertSqlPrepared struct {
-//	Sql  string
-//	Args []interface{}
-//}
-//
-//func (b *Builder) InsertSql() *InsertSqlPrepared {
-//	var fields []string
-//	for _, name := range b.inserts {
-//		fields = append(fields, name)
-//	}
-//
-//	insertSql := strings.Join(fields, ",")
-//	wherePrepared := b.buildWhereSql()
-//	joinSql := b.joinSql()
-//}
-//
-//func (b *Builder) InsertValue(n string, v interface{}) *Builder {
-//	b.args = append(b.args, v)
-//	b.inserts = append(b.inserts, n)
-//	return b
-//}
+type InsertSqlPrepared struct {
+	Sql  string
+	Args []interface{}
+}
+
+func (b *Builder) InsertSql() *InsertSqlPrepared {
+	var fields []string
+	for _, name := range b.inserts {
+		fields = append(fields, name)
+	}
+	fieldSql := strings.Join(fields, ",")
+	argSql := b.buildInsertArgSql()
+
+	sql := fmt.Sprintf(`INSERT INTO %s %s (%s) VALUES %s`,
+		b.tableName, b.tableAlias, fieldSql, argSql.Sql)
+
+	return &InsertSqlPrepared{
+		Sql:  sql,
+		Args: b.args,
+	}
+}
+
+func (b *Builder) UpdateSql() *UpdateSqlPrepared {
+	whereSql := b.buildWhereSql()
+	argSql := b.buildUpdateArgSql()
+
+	sql := fmt.Sprintf(`UPDATE %s %s %s %s`,
+		b.tableName, b.tableAlias, argSql.Sql, whereSql.Sql)
+
+	return &UpdateSqlPrepared{
+		Sql:  sql,
+		Args: b.args,
+	}
+}
+
+func (b *Builder) InsertValue(n string, v interface{}) *Builder {
+	b.args = append(b.args, v)
+	b.inserts = append(b.inserts, n)
+	return b
+}
+
+type UpdateSqlPrepared struct {
+	Sql  string
+	Args []interface{}
+}
+
+func (b *Builder) UpdateValue(field string, value interface{}) *Builder {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
+	newValue := value
+
+	if _, ok := b.updates[field]; ok {
+		return b
+	}
+	b.args = append(b.args, newValue)
+	s := strings.Replace(field, "?", fmt.Sprintf("$%d", len(b.args)), -1)
+	b.updates[field] = s
+	return b
+}
 
 func NewBuilder(tableName, tableAlias string) *Builder {
 	if tableAlias == "" {
@@ -292,6 +366,7 @@ func NewBuilder(tableName, tableAlias string) *Builder {
 		tableAlias: tableAlias,
 		selects:    []string{},
 		wheres:     map[string]string{},
+		updates:    map[string]string{},
 		mu:         &sync.Mutex{},
 	}
 }
