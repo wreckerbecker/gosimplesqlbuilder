@@ -70,38 +70,44 @@ func (b *Builder) Where(field string, value interface{}) *Builder {
 	return b
 }
 
-func (b *Builder) WhereNotEmpty(field string, value interface{}) *Builder {
+func isEmpty(value interface{}) bool {
 	if value == nil {
-		return b
+		return true
 	}
 
 	kind := reflect.TypeOf(value).Kind()
 	switch kind {
 	case reflect.Slice, reflect.Array, reflect.Map:
 		if reflect.ValueOf(value).Len() == 0 {
-			return b
+			return true
 		}
 	}
 
 	switch v := value.(type) {
 	case string:
 		if v == "" {
-			return b
+			return true
 		}
 	case int, int32, int64:
 		if v == 0 {
-			return b
+			return true
 		}
 	case float32, float64:
 		if v == 0.0 {
-			return b
+			return true
 		}
 	case time.Time:
 		if v.UnixMicro() == 0 {
-			return b
+			return true
 		}
 	}
+	return false
+}
 
+func (b *Builder) WhereNotEmpty(field string, value interface{}) *Builder {
+	if isEmpty(value) {
+		return b
+	}
 	return b.Where(field, value)
 }
 
@@ -355,6 +361,13 @@ func (b *Builder) UpdateValue(field string, value interface{}) *Builder {
 	s := strings.Replace(field, "?", fmt.Sprintf("$%d", len(b.args)), -1)
 	b.updates[field] = s
 	return b
+}
+
+func (b *Builder) UpdateValueNotEmpty(field string, value interface{}) *Builder {
+	if isEmpty(b) {
+		return b
+	}
+	return b.UpdateValue(field, value)
 }
 
 func NewBuilder(tableName, tableAlias string) *Builder {
