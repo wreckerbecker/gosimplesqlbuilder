@@ -110,13 +110,17 @@ func isEmpty(value interface{}) bool {
 
 type Condition struct {
 	field string
-	value interface{}
+	value []interface{}
 }
 
 func WhereNotEmpty(field string, value interface{}) *Condition {
 	if isEmpty(value) {
 		return nil
 	}
+	return Where(field, []interface{}{value})
+}
+
+func Where(field string, value ...interface{}) *Condition {
 	return &Condition{field, value}
 }
 
@@ -143,7 +147,7 @@ func (b *Builder) Or(conditions []*Condition) *Builder {
 	var args []interface{}
 	for _, cond := range filtered {
 		ors = append(ors, cond.field)
-		args = append(args, cond.value)
+		args = append(args, cond.value...)
 	}
 
 	orSql := fmt.Sprintf("(%s)", strings.Join(ors, " OR "))
