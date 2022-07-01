@@ -34,6 +34,7 @@ type Builder struct {
 	inserts   []string
 	updates   map[string]string
 	wheres    map[string]string
+	ors       [][]*Condition
 	joins     []*JoinInfo
 	groups    []string
 	orders    []string
@@ -55,17 +56,20 @@ func (b *Builder) Select(fields ...string) *Builder {
 	return b
 }
 
-func (b *Builder) Where(field string, value interface{}) *Builder {
+func (b *Builder) Where(field string, values ...interface{}) *Builder {
 	b.mu.Lock()
 	defer b.mu.Unlock()
-
-	newValue := value
 
 	if _, ok := b.wheres[field]; ok {
 		return b
 	}
-	b.args = append(b.args, newValue)
-	s := strings.Replace(field, "?", fmt.Sprintf("$%d", len(b.args)), -1)
+
+	s := field
+	for _, value := range values {
+		newValue := value
+		b.args = append(b.args, newValue)
+		s = strings.Replace(s, "?", fmt.Sprintf("$%d", len(b.args)), 1)
+	}
 	b.wheres[field] = s
 	return b
 }
@@ -104,11 +108,48 @@ func isEmpty(value interface{}) bool {
 	return false
 }
 
+type Condition struct {
+	field string
+	value interface{}
+}
+
+func WhereNotEmpty(field string, value interface{}) *Condition {
+	if isEmpty(value) {
+		return nil
+	}
+	return &Condition{field, value}
+}
+
 func (b *Builder) WhereNotEmpty(field string, value interface{}) *Builder {
 	if isEmpty(value) {
 		return b
 	}
 	return b.Where(field, value)
+}
+
+func (b *Builder) Or(conditions []*Condition) *Builder {
+	var filtered []*Condition
+	for _, cond := range conditions {
+		if cond != nil {
+			filtered = append(filtered, cond)
+		}
+	}
+
+	if len(filtered) == 0 {
+		return b
+	}
+
+	var ors []string
+	var args []interface{}
+	for _, cond := range filtered {
+		ors = append(ors, cond.field)
+		args = append(args, cond.value)
+	}
+
+	orSql := fmt.Sprintf("(%s)", strings.Join(ors, " OR "))
+	b.Where(orSql, args...)
+
+	return b
 }
 
 func (b *Builder) Join(name, alias, condition string) *Builder {
