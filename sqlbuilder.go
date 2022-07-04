@@ -239,7 +239,7 @@ func (b *Builder) joinSql() string {
 
 func (b *Builder) buildWhereSql() *WhereSqlPrepared {
 	if len(b.wheres) == 0 {
-		return nil
+		return &WhereSqlPrepared{Sql: ""}
 	}
 
 	var statements []string
@@ -254,9 +254,9 @@ func (b *Builder) buildWhereSql() *WhereSqlPrepared {
 	}
 }
 
-func (b *Builder) buildInsertArgSql() *WhereSqlPrepared {
+func (b *Builder) buildInsertArgSql() *InsertSqlPrepared {
 	if len(b.args) == 0 {
-		return nil
+		return &InsertSqlPrepared{Sql: ""}
 	}
 
 	var statements []string
@@ -266,14 +266,14 @@ func (b *Builder) buildInsertArgSql() *WhereSqlPrepared {
 
 	sql := fmt.Sprintf(`%s`, strings.Join(statements, ","))
 
-	return &WhereSqlPrepared{
+	return &InsertSqlPrepared{
 		Sql: "(" + sql + ")",
 	}
 }
 
 func (b *Builder) buildUpdateArgSql() *UpdateSqlPrepared {
 	if len(b.updates) == 0 {
-		return nil
+		return &UpdateSqlPrepared{Sql: ""}
 	}
 
 	var statements []string
