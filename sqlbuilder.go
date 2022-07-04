@@ -332,8 +332,8 @@ func (b *Builder) SelectSql() *SelectSqlPrepared {
 	sql := fmt.Sprintf(`SELECT %s FROM %s %s %s %s %s %s %s %s`,
 		selectSql,
 		b.tableName, b.tableAlias,
-		wherePrepared.Sql,
 		joinSql,
+		wherePrepared.Sql,
 		groupSql,
 		orderSql,
 		limitSql, offsetSql)
