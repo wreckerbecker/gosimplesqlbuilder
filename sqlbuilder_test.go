@@ -68,6 +68,26 @@ func TestBuilder_Insert(t *testing.T) {
 	}
 }
 
+func TestBuilder_Upsert(t *testing.T) {
+	builder := NewBuilder("testing", "t")
+
+	p := builder.
+		InsertValue("a", 321).
+		InsertValue("b", "whatsup").
+		OnConflict("(a) DO UPDATE SET b=?", "hey").
+		InsertSql()
+
+	expectedSql := "INSERT INTO testing t (a,b) VALUES ($1,$2) ON CONFLICT (a) DO UPDATE SET b=$3"
+	if p.Sql != expectedSql {
+		t.Logf("generated sql not matched:\n\texpected: %s\n\t   found: %s\n", expectedSql, p.Sql)
+		t.Fail()
+	}
+	if v, ok := p.Args[2].(string); !ok || v != "hey" {
+		t.Logf("args 2 not matched:\n\texpected: %s\n\t   found: %v\n", "hey", v)
+		t.Fail()
+	}
+}
+
 func TestBuilder_Update_1(t *testing.T) {
 	builder := NewBuilder("testing", "t")
 

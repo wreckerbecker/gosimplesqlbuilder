@@ -30,16 +30,18 @@ type Builder struct {
 	tableName  string
 	tableAlias string
 
-	selects   []string
-	inserts   []string
-	updates   map[string]string
-	wheres    map[string]string
-	ors       [][]*Condition
-	joins     []*JoinInfo
-	groups    []string
-	orders    []string
-	queryType QueryType
-	args      []interface{}
+	selects        []string
+	inserts        []string
+	updates        map[string]string
+	wheres         map[string]string
+	ors            [][]*Condition
+	joins          []*JoinInfo
+	groups         []string
+	orders         []string
+	queryType      QueryType
+	args           []interface{}
+	onConflict     string
+	onConflictArgs []interface{}
 
 	limit  int
 	offset int
@@ -266,8 +268,13 @@ func (b *Builder) buildInsertArgSql() *InsertSqlPrepared {
 
 	sql := fmt.Sprintf(`%s`, strings.Join(statements, ","))
 
+	onConflictSql := ""
+	if b.onConflict != "" {
+		onConflictSql = fmt.Sprintf(` ON CONFLICT %s`, b.onConflict)
+	}
+
 	return &InsertSqlPrepared{
-		Sql: "(" + sql + ")",
+		Sql: "(" + sql + ")" + onConflictSql,
 	}
 }
 
@@ -365,7 +372,7 @@ func (b *Builder) InsertSql() *InsertSqlPrepared {
 
 	return &InsertSqlPrepared{
 		Sql:  sql,
-		Args: b.args,
+		Args: append(b.args, b.onConflictArgs...),
 	}
 }
 
@@ -385,6 +392,21 @@ func (b *Builder) UpdateSql() *UpdateSqlPrepared {
 func (b *Builder) InsertValue(n string, v interface{}) *Builder {
 	b.args = append(b.args, v)
 	b.inserts = append(b.inserts, n)
+	return b
+}
+
+func (b *Builder) OnConflict(conflict string, args ...interface{}) *Builder {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
+	s := conflict
+	for _, value := range args {
+		newValue := value
+		b.onConflictArgs = append(b.onConflictArgs, newValue)
+		s = strings.Replace(s, "?", fmt.Sprintf("$%d", len(b.args)+len(b.onConflictArgs)), 1)
+	}
+
+	b.onConflict = s
 	return b
 }
 
